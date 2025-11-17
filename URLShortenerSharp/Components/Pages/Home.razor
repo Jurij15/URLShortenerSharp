@@ -1,0 +1,115 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@using URLShortenerSharp.ServiceDefaults.Extensions
+@inject IJSRuntime JS
+
+<FluentStack class="page-center" HorizontalAlignment="HorizontalAlignment.Center" VerticalAlignment="VerticalAlignment.Center" Orientation="Orientation.Vertical">
+    <h1>Shorten URL quickly and simply</h1>
+
+    <FluentStack VerticalGap="8" HorizontalAlignment="HorizontalAlignment.Center" VerticalAlignment="VerticalAlignment.Center">
+        <FluentTextField Disabled="@IsLongUrlInputDisabled" Placeholder="Enter the long url here" Minlength="350" style="min-width:350px;" Name="LongUrlInput" @bind-Value=@longUrl></FluentTextField>
+
+        <Microsoft.FluentUI.AspNetCore.Components.FluentButton Disabled="@IsSubmitButtonDisabled" ButtonType="Button" @onclick="SendData" style="margin-top: 4px;">
+            Shorten
+        </Microsoft.FluentUI.AspNetCore.Components.FluentButton>
+
+    </FluentStack>
+
+    <FluentStack HorizontalGap="4" Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.Center">
+        <p>@responseMessage</p>
+        <a href="@shortUrl">@shortUrl</a>
+    </FluentStack>
+
+    @if (!shortUrl.IsNullOrEmpty())
+    {
+        <FluentButton IconStart="@(new Icons.Regular.Size16.Copy())" hidden="@IsSubmitButtonDisabled" ButtonType="Button" @onclick="CopyText" style="margin-top: 4px;">
+            Copy to clipboard
+        </FluentButton>
+    }
+
+</FluentStack>
+<div class="page-center">
+</div>
+
+@code {
+    private string longUrl = string.Empty;
+    private string responseMessage = string.Empty;
+    private string shortUrl = string.Empty;
+
+    private bool IsLongUrlInputDisabled = false;
+    private bool IsSubmitButtonDisabled = false;
+
+    private async Task SendData()
+    {
+        shortUrl = string.Empty;
+        DisableInput();
+        StateHasChanged();
+
+        if (string.IsNullOrWhiteSpace(longUrl))
+        {
+            responseMessage = "URL cannot be empty!";
+            EnableInput();
+            return;
+        }
+
+        if (!longUrl.IsUrl())
+        {
+            responseMessage = "Not an URL!";
+            EnableInput();
+            return;
+        }
+
+        //Http.BaseAddress = new(Navigation.BaseUri);
+        StringContent content = new StringContent(longUrl, System.Text.Encoding.UTF8);
+        Uri requestUri = new($"{Navigation.BaseUri}shorten?FullURL={longUrl}");
+
+        try
+        {
+            HttpResponseMessage response = await Http.PostAsync(requestUri, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                responseMessage = "Your short URL is: ";
+                shortUrl = $"{Navigation.BaseUri}r/{(await response.Content.ReadAsStringAsync()).Replace("\"", "")}";
+            }
+            else
+            {
+                responseMessage = $"Failed: {response.StatusCode},";
+                shortUrl = string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            responseMessage = $"Error: {ex.Message}";
+        }
+
+        EnableInput();
+    }
+
+    private async Task CopyText()
+    {
+        bool success = await JS.InvokeAsync<bool>("copyToClipboard", shortUrl);
+        if (success)
+        {
+            Console.WriteLine("Copied to clipboard!");
+        }
+        else
+        {
+            Console.WriteLine("Failed to copy.");
+        }
+    }
+
+    private void DisableInput()
+    {
+        IsLongUrlInputDisabled = true;
+        IsSubmitButtonDisabled = true;
+    }
+
+    private void EnableInput()
+    {
+        IsLongUrlInputDisabled = false;
+        IsSubmitButtonDisabled = false;
+    }
+}
